@@ -13,8 +13,8 @@ def summarize_text(text: str) -> str:
     출처: https://github.com/google/generative-ai-python
     """
     try:
-        # ⚠️ 아래 괄호 안의 소문자 'api_key=' 스펠링과 발급받으신 실제 키 값을 정확히 매칭해 주세요.
-        client = genai.Client(api_key="AIzaSyAaYNnP11Onpl4svWt5hFrcLyKO9Ga4wEo")
+        # 아래 api키는 보안 이쓔로 인해 이렇게 해서 올렸슴다
+        client = genai.Client()
         
         response = client.models.generate_content(
             model="gemini-2.5-flash",
