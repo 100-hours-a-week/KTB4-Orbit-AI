@@ -1,0 +1,147 @@
+<!-- URL : https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch -->
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>2주차 위클리 챌린지 - 아키텍처 패턴</title>
+    <style>
+        body { font-family: 'Malgun Gothic', sans-serif; max-width: 960px; margin: 0 auto; padding: 20px; display: flex; gap: 40px; color: #333; }
+        section { flex: 1; }
+        .wrapper-card { background: #fafafa; padding: 20px; border: 1px solid #eaeaea; border-radius: 8px; margin-bottom: 20px; }
+        .ai-intelligence-box { background: #f0fdf4; border-left: 5px solid #22c55e; padding: 12px; margin: 15px 0; border-radius: 4px; }
+        input, textarea { width: 100%; padding: 10px; margin-bottom: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { padding: 8px 16px; background-color: #007bff; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        button:hover { background-color: #0056b3; }
+        .summary-mini-btn { font-size: 0.75rem; margin-left: 10px; padding: 3px 6px; background-color: #28a745; color: #fff; border: none; border-radius: 3px; }
+        .summary-mini-btn:hover { background-color: #218838; }
+        li { margin-bottom: 12px; line-height: 1.5; }
+        a { color: #007bff; text-decoration: none; font-weight: 500; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+    <!-- 좌측 영역: 등록 및 리스트 포커싱 -->
+    <section>
+        <h2>✍ * 커뮤니티 새 글 등록</h2>
+        <div class="wrapper-card">
+            <input type="text" id="postTitle" placeholder="게시글 제목을 기입하세요">
+            <textarea id="postContent" placeholder="본문 내용을 기입하세요" rows="5"></textarea>
+            <button onclick="executePostCreation()">게시글 등록</button>
+        </div>
+
+        <h2>📋 전체 게시물 리스트</h2>
+        <ul id="renderedPostContainer"></ul>
+    </section>
+
+    <!-- 우측 영역: 세부 정보 타겟팅 및 AI 컨트롤 -->
+    <section id="detailViewPanel" style="display:none;">
+        <h2>🔍 본문 및 댓글 상세 확인</h2>
+        <div class="wrapper-card">
+            <h3 id="targetTitleView"></h3>
+            <p id="targetContentView"></p>
+            <button onclick="requestAIPostSummary()">💡 본문 핵심 요약하기</button>
+        </div>
+
+        <h3>💬 피드백 댓글 데이터</h3>
+        <div id="aiSummaryConsole"></div>
+        <ul id="renderedCommentContainer"></ul>
+
+        <div class="wrapper-card">
+            <input type="text" id="commentPayload" placeholder="댓글 피드백 내용을 입력하십시오">
+            <button onclick="executeCommentCreation()">댓글 저장</button>
+        </div>
+    </section>
+
+    <script>
+        let globalSelectedPostId = null;
+
+        // [MDN Fetch API 적용 규칙] 브라우저 내장 비동기 fetch 통신을 사용합니다.
+        // 출처: https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch
+        async function triggerSyncPosts() {
+            const response = await fetch('/posts');
+            const data = await response.json();
+            const container = document.getElementById('renderedPostContainer');
+            container.innerHTML = '';
+            data.forEach(item => {
+                container.innerHTML += `<li><a href="#" onclick="fetchActivePostDetail(${item.id})">${item.title}</a></li>`;
+            });
+        }
+
+        async function executePostCreation() {
+            const title = document.getElementById('postTitle').value;
+            const content = document.getElementById('postContent').value;
+            if (!title || !content) return alert("필드를 모두 채워주십시오.");
+
+            await fetch('/posts', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ title, content })
+            });
+            document.getElementById('postTitle').value = '';
+            document.getElementById('postContent').value = '';
+            triggerSyncPosts();
+        }
+
+        async function fetchActivePostDetail(targetId) {
+            globalSelectedPostId = targetId;
+            document.getElementById('detailViewPanel').style.display = 'block';
+            document.getElementById('aiSummaryConsole').innerHTML = '';
+
+            const response = await fetch(`/posts/${targetId}`);
+            const post = await response.json();
+
+            document.getElementById('targetTitleView').innerText = post.title;
+            document.getElementById('targetContentView').innerText = post.content;
+
+            const commentUl = document.getElementById('renderedCommentContainer');
+            commentUl.innerHTML = post.comments.length ? '' : '<li>작성된 피드백이 존재하지 않습니다.</li>';
+            
+            post.comments.forEach(comment => {
+                commentUl.innerHTML += `
+                    <li>
+                        ${comment.content} 
+                        <button class="summary-mini-btn" onclick="requestAICommentSummary(${comment.id})">요약</button>
+                    </li>`;
+            });
+        }
+
+        async function executeCommentCreation() {
+            const textContent = document.getElementById('commentPayload').value;
+            if (!textContent) return alert("댓글 영역이 비어있습니다.");
+
+            await fetch(`/posts/${globalSelectedPostId}/comments`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ content: textContent })
+            });
+            document.getElementById('commentPayload').value = '';
+            fetchActivePostDetail(globalSelectedPostId);
+        }
+
+        function displayAiData(titleLabel, outputMessage) {
+            const element = document.getElementById('aiSummaryConsole');
+            element.innerHTML = `
+                <div class="ai-intelligence-box">
+                    <strong>🤖 Gemini 2.5 Flash ${titleLabel}:</strong><br>${outputMessage}
+                </div>
+            `;
+        }
+
+        async function requestAIPostSummary() {
+            const response = await fetch(`/posts/${globalSelectedPostId}/summary`);
+            const data = await response.json();
+            displayAiData("본문 요약본", data.summary);
+        }
+
+        async function requestAICommentSummary(commentId) {
+            const response = await fetch(`/comments/${commentId}/summary`);
+            const data = await response.json();
+            displayAiData(`댓글(ID: ${commentId}) 요약본`, data.summary);
+        }
+
+        triggerSyncPosts();
+    </script>
+</body>
+</html>
